@@ -1,0 +1,60 @@
+name: sqarkov
+version: 0.0.1
+synopsis: Text Markov chains in PostgreSQL
+-- description:
+license: OtherLicense
+license-file: COPYING
+author: Johan Kiviniemi
+maintainer: devel@johan.kiviniemi.name
+copyright: © 2013 Johan Kiviniemi
+category: Text
+build-type: Simple
+cabal-version: >=1.8
+
+library
+  exposed-modules: Sqarkov.Char
+                 , Sqarkov.Database
+                 , Sqarkov.LogParse
+                 , Sqarkov.NGram
+  build-depends: base == 4.*
+               , attoparsec == 0.10.*
+               , bytestring == 0.10.*
+               , containers == 0.5.*
+               , database-migrate == 0.1.*
+               , either == 3.4.*
+               , filepath == 1.3.*
+               , postgresql-simple == 0.3.*
+               , text == 0.11.*
+  hs-source-dirs: src
+  ghc-options: -Wall
+
+executable sqarkov-import
+  main-is: Import.hs
+  build-depends: base == 4.*
+               , sqarkov
+               , attoparsec == 0.10.*
+               , bytestring == 0.10.*
+               , containers == 0.5.*
+               , database-migrate == 0.1.*
+               , either == 3.4.*
+               , filepath == 1.3.*
+               , postgresql-simple == 0.3.*
+               , text == 0.11.*
+               , timeit == 1.0.*
+  hs-source-dirs: src
+  ghc-options: -Wall
+
+executable sqarkov-query
+  main-is: Query.hs
+  build-depends: base == 4.*
+               , sqarkov
+               , attoparsec == 0.10.*
+               , bytestring == 0.10.*
+               , containers == 0.5.*
+               , database-migrate == 0.1.*
+               , either == 3.4.*
+               , filepath == 1.3.*
+               , postgresql-simple == 0.3.*
+               , text == 0.11.*
+  hs-source-dirs: src
+  ghc-options: -Wall
