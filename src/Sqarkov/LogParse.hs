@@ -1,6 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Sqarkov.LogParse
-  ( LogEntry (..), LogEvent (..), Timestamp, Nick, Content
-  , logGram7s, logEntries, logEntry
+  ( LogEvent (..), Timestamp, Nick, Content
+  , logGram7s, logEvents, logEvent
   ) where
 
 import Control.Applicative
@@ -11,10 +13,6 @@ import qualified Data.Text as Text
 
 import Sqarkov.NGram
 
-data LogEntry = LogEntry Timestamp LogEvent
-              | OtherEntry Text
-  deriving (Eq, Ord, Show, Read)
-
 data LogEvent = Message Nick Content
               | OtherEvent Text
   deriving (Eq, Ord, Show, Read)
@@ -24,18 +22,25 @@ type Nick      = Text
 type Content   = Text
 
 logGram7s :: Text -> Parser [Gram7]
-logGram7s channel = concatMap go <$> logEntries
+logGram7s channel = concatMap go <$> logEvents
   where
-    go (LogEntry _ (Message mnick mcontent)) =
+    go (Message mnick mcontent) =
       gram7Phrase channel mnick mcontent
     go _ = []
 
-logEntries :: Parser [LogEntry]
-logEntries = many logEntry
+logEvents :: Parser [LogEvent]
+logEvents = many logEvent
 
-logEntry :: Parser LogEntry
-logEntry = LogEntry <$> timestamp <*> (message <|> OtherEvent <$> line)
-       <|> OtherEntry <$> line
+logEvent :: Parser LogEvent
+logEvent = timestamp *> (char '\t' *> weechatEvent <|> char ' ' *> irssiEvent)
+       <|> OtherEvent <$> line
+  where
+    weechatEvent = Message <$> (nickPrefix *> nick <* char '\t')
+                           <*> line
+               <|> OtherEvent <$> line
+    irssiEvent = Message <$> (char '<' *> nickPrefix *> nick <* "> ")
+                         <*> line
+             <|> OtherEvent <$> line
 
 timestamp :: Parser Timestamp
 timestamp = do
@@ -44,15 +49,14 @@ timestamp = do
   _day   <- replicateM 2 digit <* char ' '
   _hour  <- replicateM 2 digit <* char ':'
   _min   <- replicateM 2 digit <* char ':'
-  _sec   <- replicateM 2 digit <* char ' '
-  _tzsign <- satisfy (\c -> c == '+' || c == '-')
-  _tzhour <- replicateM 2 digit
-  _tzmin  <- replicateM 2 digit <* char '\t'
-  return ()
-
-message :: Parser LogEvent
-message = Message <$> (nickPrefix *> nick <* char '\t')
-                  <*> line
+  _sec   <- replicateM 2 digit
+  (char ' ' *> tz) <|> return ()
+  where
+    tz = do
+      _tzsign <- satisfy (\c -> c == '+' || c == '-')
+      _tzhour <- replicateM 2 digit
+      _tzmin  <- replicateM 2 digit
+      return ()
 
 line :: Parser Text
 line = AP.takeWhile (/= '\n') <* char '\n'
