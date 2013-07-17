@@ -68,11 +68,15 @@ nick :: Parser Nick
 nick = Text.cons <$> satisfy isNickInitChar
                  <*> AP.takeWhile isNickChar
   where
+    -- http://tools.ietf.org/html/rfc2812#section-2.3.1
+    -- Also allow digit as the initial character to recognize IRCnet UID nicks.
+
     isNickChar :: Char -> Bool
     isNickChar c = isNickInitChar c || c == '-'
 
     isNickInitChar :: Char -> Bool
     isNickInitChar c = ('A' <= c && c <= 'Z')
                     || ('a' <= c && c <= 'z')
+                    || ('0' <= c && c <= '9')
                     || ('[' <= c && c <= '`')  -- [ \ ] ^ _ `
                     || ('{' <= c && c <= '}')  -- { | }
