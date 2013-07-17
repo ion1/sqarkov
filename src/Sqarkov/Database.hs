@@ -10,6 +10,7 @@ module Sqarkov.Database
   , phraseChannelNicks
   ) where
 
+import Control.DeepSeq
 import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Either
@@ -111,80 +112,36 @@ phraseChannelNicks db channel nicks = phrase db sel (channel, In nicks)
 
 phrase :: ToRow params => Connection -> Query -> params
        -> IO (Maybe (Set Text, Set Text, Text))
-phrase db sel params =
-  fold db (randomQuery sel) params mempty $
-    \prev (ch, n, phr) ->
-      return $ prev <> Just (Set.singleton ch, Set.singleton n, phr)
+phrase db sel params = do
+  withSavepoint db $ do
+    _ <- execute db createTempView params
 
--- TODO: This seriously needs some cleaning up.
-randomQuery :: Query -> Query
-randomQuery sel =
-  [sql|
-    with recursive
-    everything as (
-      select channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id
-      from gram7 g
-  |]
-  <> " " <> sel <> " " <>
-  [sql|
-    ),
-    start as (
-      select 0 num, channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id
-        from everything
-        offset floor(random()*(select count(*) from everything))
-        limit 1
-    ),
-    -- Recursion to the left.
-    rleft (num, channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id) as (
-      (
-        select num, channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id
-          from start
-      ) union (
-        with sel as (
-          select r.num - 1 num, n.channel_id, n.nick_id, n.wl3_id, n.wl2_id, n.wl1_id, n.wm0_id, n.wr1_id, n.wr2_id, n.wr3_id
-            from everything n
-            join rleft r on r.wl3_id = n.wl2_id
-                        and r.wl2_id = n.wl1_id
-                        and r.wl1_id = n.wm0_id
-                        and r.wm0_id = n.wr1_id
-                        and r.wr1_id = n.wr2_id
-                        and r.wr2_id = n.wr3_id
-        )
-          select num, channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id
-            from sel
-            offset floor(random()*(select count(*) from sel))
-            limit 1
-      )
-    ),
-    -- Recursion to the right.
-    rright (num, channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id) as (
-      (
-        select num, channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id
-          from start
-      ) union (
-        with sel as (
-          select r.num + 1 num, n.channel_id, n.nick_id, n.wl3_id, n.wl2_id, n.wl1_id, n.wm0_id, n.wr1_id, n.wr2_id, n.wr3_id
-            from everything n
-            join rright r on r.wl2_id = n.wl3_id
-                         and r.wl1_id = n.wl2_id
-                         and r.wm0_id = n.wl1_id
-                         and r.wr1_id = n.wm0_id
-                         and r.wr2_id = n.wr1_id
-                         and r.wr3_id = n.wr2_id
-        )
-          select num, channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id
-            from sel
-            offset floor(random()*(select count(*) from sel))
-            limit 1
-      )
-    )
-    select ch.name, n.name, wm0.word
-      from (select * from rleft union select * from rright) r
-      join channel ch  on ch.id  = r.channel_id
-      join nick    n   on n.id   = r.nick_id
-      join word    wm0 on wm0.id = r.wm0_id
-      order by r.num
-  |]
+    res <- fold_ db selectRandomPhrase mempty $
+             \prev (ch, n, phr) ->
+               return $!! prev <> Just (Set.singleton ch, Set.singleton n, phr)
+
+    _ <- execute_ db dropTempView
+
+    return res
+
+  where
+    createTempView =
+      [sql|
+        create temporary view gram7_selection as
+          select g.id, g.channel_id, g.nick_id, g.wl3_id, g.wl2_id, g.wl1_id, g.wm0_id, g.wr1_id, g.wr2_id, g.wr3_id
+            from gram7 g
+      |] <> " " <> sel <> ";"
+    selectRandomPhrase =
+      [sql|
+        select ch.name, n.name, wm0.word
+          from random_phrase() r
+          join channel ch  on ch.id  = r.channel_id
+          join nick    n   on n.id   = r.nick_id
+          join word    wm0 on wm0.id = r.wm0_id
+          order by r.ord
+      |]
+    dropTempView =
+      [sql| drop view gram7_selection; |]
 
 ioEitherT :: EitherT String IO a -> IO a
 ioEitherT = either (ioError . userError) return <=< runEitherT
