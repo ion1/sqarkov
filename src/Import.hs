@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main (main) where
 
 import Control.Applicative
@@ -18,8 +20,9 @@ main :: IO ()
 main =
   withDatabase $ \db -> do
     withTransaction db $ do
-      files <- getArgs
+      _ <- execute_ db "set local synchronous_commit to off"
 
+      files <- getArgs
       forM_ files $ \f -> do
         hPrint stderr f
         let channel = (Text.pack . takeFileName . takeDirectory) f
