@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TupleSections #-}
 
 {-# LANGUAGE TypeOperators #-}
 
@@ -14,7 +15,11 @@ import Control.DeepSeq
 import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Either
+import Data.List
+import qualified Data.Map as Map
+import Data.Maybe
 import Data.Monoid
+import Data.Ord
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Text (Text)
@@ -118,11 +123,13 @@ phrase db sel params = do
 
     res <- fold_ db selectRandomPhrase mempty $
              \prev (ch, n, phr) ->
-               return $!! prev <> Just (Set.singleton ch, Set.singleton n, phr)
+               return $!! prev <> Just (Set.singleton ch, [n], phr)
 
     _ <- execute_ db dropTempView
 
-    return res
+    return $
+      fmap (\(chs, ns, phr) -> (chs, (Set.fromList . majorityElems) ns, phr))
+           res
 
   where
     createTempView =
@@ -142,6 +149,20 @@ phrase db sel params = do
       |]
     dropTempView =
       [sql| drop view gram7_selection; |]
+
+-- Only pick the majority nick that contributed to each word.
+majorityElems :: Ord a => [a] -> [a]
+majorityElems ns = concatMap (take 1 . majority) $ windows
+  where
+    padded = replicate 3 Nothing ++ map Just ns ++ replicate 3 Nothing
+
+    windows = do
+      (n1:n2:n3:n4:n5:n6:n7:_) <- tails padded
+      return . catMaybes $ [n1, n2, n3, n4, n5, n6, n7]
+
+    majority xs = sortBy (flip (comparing (counts Map.!))) xs
+      where
+        counts = Map.fromListWith (+) . map (, 1 :: Integer) $ xs
 
 ioEitherT :: EitherT String IO a -> IO a
 ioEitherT = either (ioError . userError) return <=< runEitherT
