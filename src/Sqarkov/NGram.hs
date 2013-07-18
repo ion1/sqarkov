@@ -1,13 +1,16 @@
 module Sqarkov.NGram
-  ( Gram7 (..), gram7Phrase
+  ( Gram7 (..), gram7Phrase, escapeCopyGram7
   ) where
 
 import Control.Applicative
+import Data.ByteString (ByteString)
 import Data.Char
 import Data.Function
 import Data.List
 import Data.Text (Text)
 import qualified Data.Text as Text
+import Data.Text.Encoding
+import Database.PostgreSQL.Copy.Escape
 import Database.PostgreSQL.Simple.FromRow
 import Database.PostgreSQL.Simple.ToField
 import Database.PostgreSQL.Simple.ToRow
@@ -47,3 +50,8 @@ gram7Phrase channel nick phrase = phraseGrams
 
     channel' = Text.toLower channel
     nick'    = Text.toLower . Text.filter isAlpha $ nick
+
+escapeCopyGram7 :: Gram7 -> ByteString
+escapeCopyGram7 (Gram7 ch n wl3 wl2 wl1 wm0 wr1 wr2 wr3)
+  = escapeCopyRow . map (EscapeCopyText . encodeUtf8)
+  $ [ch, n, wl3, wl2, wl1, wm0, wr1, wr2, wr3]

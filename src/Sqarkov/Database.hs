@@ -15,6 +15,9 @@ import Control.DeepSeq
 import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Either
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Lazy.Builder as BSB
+import Data.Foldable (foldMap)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
@@ -25,6 +28,7 @@ import qualified Data.Set as Set
 import Data.Text (Text)
 import qualified Database.Migrate as M
 import Database.PostgreSQL.Simple
+import Database.PostgreSQL.Simple.Copy
 import Database.PostgreSQL.Simple.SqlQQ
 
 import Sqarkov.NGram
@@ -40,8 +44,11 @@ withDatabase act =
 insertGram7s :: Connection -> [Gram7] -> IO ()
 insertGram7s db gram7s = do
   _ <- execute_ db createTempTable
-  -- TODO: “copy from” pending postgresql-simple support.
-  _ <- executeMany db insertTemp gram7s
+
+  copy_ db copyTemp
+  putCopyBuilder db . foldMap (BSB.byteString . escapeCopyGram7) $ gram7s
+  _ <- putCopyEnd db
+
   _ <- execute_ db transferMain
   _ <- execute_ db dropTempTable
   return ()
@@ -61,11 +68,11 @@ insertGram7s db gram7s = do
           , wr3     text not null
           );
       |]
-    insertTemp =
+    copyTemp =
       [sql|
-        insert into gram7_import
+        copy gram7_import
           (channel, nick, wl3, wl2, wl1, wm0, wr1, wr2, wr3)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?);
+          from stdin;
       |]
     transferMain =
       [sql|
@@ -149,6 +156,9 @@ phrase db sel params = do
       |]
     dropTempView =
       [sql| drop view gram7_selection; |]
+
+putCopyBuilder :: Connection -> BSB.Builder -> IO ()
+putCopyBuilder db = mapM_ (putCopyData db) . BSL.toChunks . BSB.toLazyByteString
 
 -- Only pick the majority nick that contributed to each word.
 majorityElems :: Ord a => [a] -> [a]

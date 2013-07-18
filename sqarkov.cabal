@@ -24,7 +24,8 @@ library
                , deepseq == 1.3.*
                , either == 3.4.*
                , filepath == 1.3.*
-               , postgresql-simple == 0.3.*
+               , postgresql-copy-escape == 0.1.*
+               , postgresql-simple >= 0.3.4 && < 0.4
                , text == 0.11.*
   hs-source-dirs: src
   ghc-options: -Wall
@@ -40,7 +41,8 @@ executable sqarkov-import
                , deepseq == 1.3.*
                , either == 3.4.*
                , filepath == 1.3.*
-               , postgresql-simple == 0.3.*
+               , postgresql-copy-escape == 0.1.*
+               , postgresql-simple >= 0.3.4 && < 0.4
                , text == 0.11.*
   hs-source-dirs: src
   ghc-options: -Wall
@@ -56,7 +58,8 @@ executable sqarkov-query
                , deepseq == 1.3.*
                , either == 3.4.*
                , filepath == 1.3.*
-               , postgresql-simple == 0.3.*
+               , postgresql-copy-escape == 0.1.*
+               , postgresql-simple >= 0.3.4 && < 0.4
                , text == 0.11.*
   hs-source-dirs: src
   ghc-options: -Wall
