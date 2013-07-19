@@ -35,11 +35,11 @@ create table gram7
   , wr3_id     integer not null references word (id)
   );
 create index gram7_ch         on gram7 (channel_id);
-create index gram7_ch_word    on gram7 (channel_id, wm0_id);
+--create index gram7_ch_word    on gram7 (channel_id, wm0_id);
 create index gram7_ch_left    on gram7 (channel_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id);
 create index gram7_ch_right   on gram7 (channel_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id);
 create index gram7_ch_n       on gram7 (channel_id, nick_id);
-create index gram7_ch_n_word  on gram7 (channel_id, nick_id, wm0_id);
+--create index gram7_ch_n_word  on gram7 (channel_id, nick_id, wm0_id);
 create index gram7_ch_n_left  on gram7 (channel_id, nick_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id, wr3_id);
 create index gram7_ch_n_right on gram7 (channel_id, nick_id, wl3_id, wl2_id, wl1_id, wm0_id, wr1_id, wr2_id);
 
