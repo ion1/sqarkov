@@ -7,7 +7,6 @@ import Control.Arrow ((&&&))
 import Data.Foldable (foldMap)
 import Data.Function
 import Data.List
-import qualified Data.Map as Map
 import Data.Monoid
 import Data.Text (Text)
 import qualified Data.Text as Text
@@ -37,70 +36,31 @@ main = do
 
     pretty :: [(Text, Text)] -> Text
     pretty tuples =
-      foldMap (\cf -> prettyWith cf nicks nickColor wordGroups <> "\n")
-              [ ansiColor, weechatColor ]
+      foldMap (\fmt -> prettyWith fmt wordGroups <> "\n")
+              [ ansiFormat, weechatFormat ]
       where
-        nicks = nub (map fst tuples)
-        nickColor = (m Map.!)  -- Set.findIndex with containers ≥ 0.5.2.
-          where m = Map.fromList . zip nicks $ [0..]
-
         wordGroups = map (fst . head &&& foldMap snd)
                    . groupBy ((==) `on` fst)
                    $ tuples
 
-    prettyWith :: (Integer -> Text -> Text) -> [Text] -> (Text -> Integer)
-               -> [(Text, Text)] -> Text
-    prettyWith color nicks nickColor wordGroups
-      = "<" <> Text.intercalate "," (map (color' <*> mangle) nicks) <> "> "
-     <> foldMap (uncurry color') wordGroups
-      where color' n = color (nickColor n)
-
-    ansiColor n t
-      | n >= 1 && n <=  6 = normal n       <> t <> none
-      | n >= 7 && n <= 13 = bright (n - 7) <> t <> none
-      | otherwise         = t
+    prettyWith :: (Text, Text, Text, Text -> Text) -> [(Text, Text)] -> Text
+    prettyWith (colorA, colorB, normal, escape) wordGroups
+      = "<" <> Text.intercalate "," (alternateA (map mangle nicks)) <> "> "
+     <> mconcat (alternateA phrases)
       where
-        normal c = color False (30 + c)
-        bright c = color True  (30 + c)
-        none     = color False 0
+        (nicks, phrases) = unzip wordGroups
 
-        color :: Bool -> Integer -> Text
-        color isBright c = "\ESC[" <> Text.pack (show c)
-                        <> if isBright then ";1" else "" <> "m"
+        alternateA (x:xs) = colorA <> escape x <> normal : alternateB xs
+        alternateA []     = []
+        alternateB (x:xs) = colorB <> escape x <> normal : alternateA xs
+        alternateB []     = []
 
-    weechatColor n t
-      | n >= 1 && n <=  6 = normal n       <> escapeComma t <> none
-      | n >= 7 && n <= 13 = bright (n - 7) <> escapeComma t <> none
-      | otherwise         = t
+    ansiFormat    = ("\ESC[32m", "\ESC[33m", "\ESC[0m", id)
+    weechatFormat = ("\3c03",    "\3c07",    "\3o",     escape)
       where
-        escapeComma text = case Text.uncons text of
-          Just (',', _) -> zeroWidthNoBreakSpace <> text
-          _             -> text
-
-        normal = color False
-        bright = color True
-        none   = "\3o"
-        color isBright c = "\3c" <> colorMap Map.! (isBright, c)
-
-        -- http://en.wikipedia.org/wiki/ANSI_escape_code#Colors
-        -- http://www.weechat.org/files/doc/stable/weechat_user.en.html#command_line_colors
-        colorMap = Map.fromList [ ((False, 0), "01")
-                                , ((False, 1), "05")
-                                , ((False, 2), "03")
-                                , ((False, 3), "07")
-                                , ((False, 4), "02")
-                                , ((False, 5), "06")
-                                , ((False, 6), "10")
-                                , ((False, 7), "15")
-                                , ((True,  0), "14")
-                                , ((True,  1), "04")
-                                , ((True,  2), "09")
-                                , ((True,  3), "08")
-                                , ((True,  4), "12")
-                                , ((True,  5), "13")
-                                , ((True,  6), "11")
-                                , ((True,  7), "00")
-                                ]
+        escape text = case Text.uncons text of
+                        Just (',', _) -> zeroWidthNoBreakSpace <> text
+                        _             -> text
 
     -- Modify the nicks so they are unlikely to cause highlights when pasted to
     -- IRC.
