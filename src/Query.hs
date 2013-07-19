@@ -6,6 +6,7 @@ import Control.Applicative
 import Data.Foldable (toList)
 import Data.List
 import Data.Monoid
+import Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import Database.PostgreSQL.Simple
@@ -34,6 +35,18 @@ main = do
     pretty (chs, nicks, phr)
       = mconcat . intersperse " "
       $ [ Text.intercalate "," (toList chs)
-        , "<" <> Text.intercalate "," (toList nicks) <> ">"
+        , "<" <> (Text.intercalate "," . map mangle . toList) nicks <> ">"
         , phr
         ]
+
+    -- Modify the nicks so they are unlikely to cause highlights when pasted to
+    -- IRC.
+    mangle :: Text -> Text
+    mangle = Text.intercalate zeroWidthNoBreakSpace . split 1
+      where
+        zeroWidthNoBreakSpace = "\xfeff"
+
+        split n xs =
+          case Text.splitAt n xs of
+            (as, bs) | Text.null as -> []
+                     | otherwise    -> as : split (n+2) bs
