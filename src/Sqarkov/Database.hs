@@ -17,14 +17,13 @@ import Control.Monad
 import Control.Monad.Trans.Either
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Builder as BSB
-import Data.Foldable (foldMap)
+import Data.Foldable (foldMap, toList)
 import Data.List
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
-import Data.Set (Set)
-import qualified Data.Set as Set
+import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import qualified Database.Migrate as M
 import Database.PostgreSQL.Simple
@@ -104,7 +103,7 @@ insertGram7s db gram7s = do
     dropTempTable =
       [sql| drop table gram7_import; |]
 
-phraseChannel :: Connection -> Text -> IO (Maybe (Set Text, Set Text, Text))
+phraseChannel :: Connection -> Text -> IO (Maybe [(Text, Text)])
 phraseChannel db channel = phrase db sel (Only channel)
   where
     sel = [sql|
@@ -113,7 +112,7 @@ phraseChannel db channel = phrase db sel (Only channel)
           |]
 
 phraseChannelNicks :: Connection -> Text -> [Text]
-                  -> IO (Maybe (Set Text, Set Text, Text))
+                  -> IO (Maybe [(Text, Text)])
 phraseChannelNicks db channel nicks = phrase db sel (channel, In nicks)
   where
     sel = [sql|
@@ -123,20 +122,19 @@ phraseChannelNicks db channel nicks = phrase db sel (channel, In nicks)
           |]
 
 phrase :: ToRow params => Connection -> Query -> params
-       -> IO (Maybe (Set Text, Set Text, Text))
+       -> IO (Maybe [(Text, Text)])
 phrase db sel params = do
   withSavepoint db $ do
     _ <- execute db createTempView params
 
     res <- fold_ db selectRandomPhrase mempty $
-             \prev (ch, n, phr) ->
-               return $!! prev <> Just (Set.singleton ch, [n], phr)
+             \prev (n, phr) ->
+               return $!! prev <> Just (Seq.singleton n, Seq.singleton phr)
 
     _ <- execute_ db dropTempView
 
-    return $
-      fmap (\(chs, ns, phr) -> (chs, (Set.fromList . majorityElems) ns, phr))
-           res
+    return $ fmap (\(ns, phrs) -> zip (majorityElems (toList ns)) (toList phrs))
+                  res
 
   where
     createTempView =
@@ -147,7 +145,7 @@ phrase db sel params = do
       |] <> " " <> sel <> ";"
     selectRandomPhrase =
       [sql|
-        select ch.name, n.name, wm0.word
+        select n.name, wm0.word
           from random_phrase() r
           join channel ch  on ch.id  = r.channel_id
           join nick    n   on n.id   = r.nick_id
@@ -162,7 +160,7 @@ putCopyBuilder db = mapM_ (putCopyData db) . BSL.toChunks . BSB.toLazyByteString
 
 -- Only pick the majority nick that contributed to each word.
 majorityElems :: Ord a => [a] -> [a]
-majorityElems ns = concatMap (take 1 . majority) $ windows
+majorityElems ns = concatMap (take 1 . majority) windows
   where
     padded = replicate 3 Nothing ++ map Just ns ++ replicate 3 Nothing
 
