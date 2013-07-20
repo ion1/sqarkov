@@ -35,32 +35,15 @@ main = do
       exitWith (ExitFailure 1)
 
     pretty :: [(Text, Text)] -> Text
-    pretty tuples =
-      foldMap (\fmt -> prettyWith fmt wordGroups <> "\n")
-              [ ansiFormat, weechatFormat ]
-      where
-        wordGroups = map (fst . head &&& foldMap snd)
-                   . groupBy ((==) `on` fst)
-                   $ tuples
-
-    prettyWith :: (Text, Text, Text, Text -> Text) -> [(Text, Text)] -> Text
-    prettyWith (colorA, colorB, normal, escape) wordGroups
-      = "<" <> Text.intercalate "," (alternateA (map mangle nicks)) <> "> "
-     <> mconcat (alternateA phrases)
+    pretty tuples
+      = "<" <> (Text.intercalate "," . map mangle . nub) nicks <> "> "
+     <> mconcat phrases
       where
         (nicks, phrases) = unzip wordGroups
 
-        alternateA (x:xs) = colorA <> escape x <> normal : alternateB xs
-        alternateA []     = []
-        alternateB (x:xs) = colorB <> escape x <> normal : alternateA xs
-        alternateB []     = []
-
-    ansiFormat    = ("\ESC[32m", "\ESC[33m", "\ESC[0m", id)
-    weechatFormat = ("\3c03",    "\3c07",    "\3o",     escape)
-      where
-        escape text = case Text.uncons text of
-                        Just (',', _) -> zeroWidthNoBreakSpace <> text
-                        _             -> text
+        wordGroups = map (fst . head &&& foldMap snd)
+                   . groupBy ((==) `on` fst)
+                   $ tuples
 
     -- Modify the nicks so they are unlikely to cause highlights when pasted to
     -- IRC.
